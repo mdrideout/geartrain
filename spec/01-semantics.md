@@ -159,8 +159,8 @@ Options are stated on the task or workflow in code, because they describe that p
 | Option | Applies to | Meaning | If absent |
 |---|---|---|---|
 | `retries` | Tasks, workflows | Failed attempts allowed after the first | 0 |
-| `backoff_factor` | Tasks, workflows | Base of the exponential backoff | Retry immediately |
-| `backoff_max_seconds` | Tasks, workflows | Cap on one backoff delay | No cap |
+| `backoff_factor` | Tasks, workflows | Base of the exponential backoff | 2.0 |
+| `backoff_max_seconds` | Tasks, workflows | Cap on one backoff delay | 60 |
 | `execution_timeout` | Tasks, workflows | How long one attempt may take | The engine's default: 10 minutes for a task, 60 seconds for a workflow call |
 | `schedule_timeout` | Tasks | How long a task may wait for its first attempt to start | **The task waits indefinitely** |
 | `uses` | Tasks | Limit names and unit counts ([02](02-queues-and-limits.md) §3) | Uses nothing of its own |
@@ -178,7 +178,7 @@ A value stated on the task or workflow always wins, and may be longer or shorter
 
 `schedule_timeout` has no default. A task waiting in a queue holds nothing, and a default would fail work that is only waiting for a paused queue or a deploy.
 
-The backoff delay before retry number `n` (the first retry is 1) is `backoff_factor ^ n` seconds, capped at `backoff_max_seconds`. With factor 2.0 and cap 10 this gives 2 s, 4 s, 8 s, 10 s, 10 s.
+**Every retry backs off.** The delay before retry number `n` (the first retry is 1) is `backoff_factor ^ n` seconds, capped at `backoff_max_seconds`. With the defaults this gives 2 s, 4 s, 8 s, 16 s, 32 s, 60 s, 60 s. The same rule applies whatever made the attempt fail: an error, a timeout or a lost worker. The two default values are part of **Default D11**.
 
 The engine reads options from the catalog at the moment it needs them, so a redeploy that changes an option applies to work already waiting.
 
@@ -211,8 +211,8 @@ Every step has its own count of failed attempts.
 **Connected workers.** The engine learns a worker is gone when its stream closes.
 
 - **Decided.** The engine then waits 10 seconds for the worker to reconnect. The value is the engine setting `worker_reconnect_grace`. Without a wait, every network blip would re-run work that is still running.
-- **Default D11** covers the backoff. A worker whose stream closes reconnects at once. If that fails it waits 250 ms and doubles the wait after each failure, up to 5 seconds, with random jitter so that many workers do not reconnect in step after an engine restart. It keeps trying for as long as the process lives. Several tries fit inside the grace period.
-- Work lost after the grace period is not retried at once either: each lost attempt is retried under its task's own `backoff_factor` (section 5.1).
+- After the 10 seconds, the worker's open attempts are failed attempts like any other, and are retried with the normal backoff (section 5.1).
+- The worker's side is ordinary client behaviour: the SDK reconnects with exponential backoff and jitter, starting at 1 second, doubling, capped at 30 seconds, for as long as the process lives.
 - If the worker reconnects in time with the same worker id, its attempts carry on. The engine re-sends every call still open for that worker, because a call written to a dying connection may never have arrived. The SDK must ignore a call id it is already running, and must re-post the outcome for one it has finished.
 - If the grace period passes, every open attempt on that worker ends as `lost`, and the worker's record is removed. A later reconnect is refused with `worker_gone`, and the worker registers again and gets a new worker id.
 - A worker process that restarts registers again and gets a new worker id. Its old id runs out its grace period.

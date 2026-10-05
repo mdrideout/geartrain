@@ -81,8 +81,8 @@ Written by worker registration and service sync.
 CREATE TABLE task_def (
   name                 TEXT PRIMARY KEY,
   retries              INTEGER NOT NULL DEFAULT 0,
-  backoff_factor       REAL,        -- NULL: retry immediately
-  backoff_max_ms       INTEGER,     -- NULL: no cap
+  backoff_factor       REAL,        -- NULL: 2.0
+  backoff_max_ms       INTEGER,     -- NULL: 60 seconds
   execution_timeout_ms INTEGER,     -- NULL: the engine's default applies
   schedule_timeout_ms  INTEGER      -- NULL: waits indefinitely
 ) WITHOUT ROWID;
