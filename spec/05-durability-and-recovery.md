@@ -60,7 +60,9 @@ The engine reads one TOML file, named on the command line.
 | `database` | Path of the SQLite file | Required |
 | `listen` | Address and port to serve on | Required |
 | `durability` | `relaxed`, `durable-enqueue` or `strict` | `durable-enqueue` |
-| `worker_reconnect_grace` | Seconds to wait for a disconnected worker (D11) | 30 |
+| `worker_reconnect_grace` | Seconds to wait for a disconnected worker (D11) | 10 |
+| `default_task_execution_timeout` | Seconds one task attempt may take when the task states none (D10) | 600 |
+| `default_workflow_execution_timeout` | Seconds one workflow call may take when the workflow states none (D10) | 60 |
 | `stream_keepalive_seconds` | Interval between keep-alive comments on a stream | 15 |
 | `[[token]]` with `role` and `value_env` | One per API token. `value_env` names the environment variable holding it | At least one `admin` token is required |
 

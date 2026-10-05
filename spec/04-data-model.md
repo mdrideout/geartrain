@@ -83,7 +83,7 @@ CREATE TABLE task_def (
   retries              INTEGER NOT NULL DEFAULT 0,
   backoff_factor       REAL,        -- NULL: retry immediately
   backoff_max_ms       INTEGER,     -- NULL: no cap
-  execution_timeout_ms INTEGER,     -- NULL: never timed out
+  execution_timeout_ms INTEGER,     -- NULL: the engine's default applies
   schedule_timeout_ms  INTEGER      -- NULL: waits indefinitely
 ) WITHOUT ROWID;
 
@@ -99,7 +99,7 @@ CREATE TABLE workflow_def (
   retries              INTEGER NOT NULL DEFAULT 0,
   backoff_factor       REAL,
   backoff_max_ms       INTEGER,
-  execution_timeout_ms INTEGER
+  execution_timeout_ms INTEGER      -- NULL: the engine's default applies
 ) WITHOUT ROWID;
 -- A name is in task_def or workflow_def, never both. Enforced in code.
 
@@ -204,7 +204,7 @@ CREATE TABLE attempt (
   host_name     TEXT NOT NULL,          -- kept for the record after a worker row is deleted
   queued_at     INTEGER NOT NULL,       -- when this attempt's wait began
   started_at    INTEGER NOT NULL,
-  timeout_at    INTEGER,                -- NULL: never timed out
+  timeout_at    INTEGER NOT NULL,       -- started_at plus the execution timeout in force
   finished_at   INTEGER,                -- NULL: the attempt is open
   outcome       TEXT CHECK (outcome IN ('ok', 'error', 'limited', 'suspended',
                   'continue_as_new', 'timeout', 'lost', 'engine_restart')),

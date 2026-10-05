@@ -20,3 +20,7 @@ spec/    protocol, semantics, definitions-file format, data model, durability
 ```
 
 `engine/`, `sdk/`, `tests/` and `examples/` are added in later phases. See [spec/README.md](spec/README.md) for the phase plan.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).

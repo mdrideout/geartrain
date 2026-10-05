@@ -4,7 +4,7 @@
 |---|---|
 | Date | 2026-10-04 |
 | Owner | Matt |
-| State | Draft for Matt's review. No engine code exists. |
+| State | Draft, revised with Matt's decisions of 2026-10-04. No engine code exists. |
 | Source | The design handoff of 2026-10-04 ("the handoff"). Section numbers such as "handoff 6.7" refer to it. |
 
 This specification is the source of truth for the engine and the SDKs. Where it and the handoff differ, this specification wins, and the difference is listed in section 4 below.
@@ -38,21 +38,21 @@ Every rule in these documents carries one of three labels, or none.
 | D1 | Where is a task's queue set? | In the definitions file, never on the task | Handoff option (17.1) | 02 §2 |
 | D2 | Do the handoff's proposals P1 to P10 stand? | Yes, all ten, as written | Handoff option (17.2) | Throughout |
 | D3 | Definitions format and ownership | One TOML file applied by an administrator. Applications cannot define queues through the API | Handoff option (17.3) | 02 §1 |
-| D4 | Which SDK is built first? | Python | Spec choice (17.5). The handoff's examples and the reference workload are Python | 03 §8 |
-| D5 | Authentication and TLS | Static bearer tokens with three roles. The engine serves plain HTTP and sits behind a proxy that terminates TLS | Handoff option for tokens; spec choice for TLS (17.6) | 03 §1 |
+| D4 | Which SDK is built first? | Rust, then Python, then TypeScript | **Decided** (Rust first). The order of the other two is a spec choice | 03 §8 |
+| D5 | Authentication and TLS | Static bearer tokens with three roles. The engine serves plain HTTP and sits behind a proxy that terminates TLS | Matt asked for the spec's recommendation, and this is it | 03 §1 |
 | D6 | Retention of finished runs | Nothing is deleted automatically. A retention setting arrives in phase 6 | Spec choice (17.7) | 04 §5 |
 | D7 | Schedule firings missed while the engine was down | Each schedule starts one catch-up run at startup, however many firings were missed | Spec choice (17.8) | 01 §9 |
 | D8 | Priority and fairness across keys | In a round-robin queue, priority orders work inside one key only. In a fifo queue, priority orders the whole queue | Handoff option (17.9, the prototype's behaviour) | 02 §4 |
 | D9 | A second read-only connection | No. One connection on one thread | Handoff option (17.10) | 05 §1 |
-| D10 | Timeouts against the "no arbitrary timeouts" rule | The engine ships no default timeout. `execution_timeout` and `schedule_timeout` are off unless the task's author sets them | Spec choice (review gap) | 01 §5 |
-| D11 | Worker reconnect grace period | An engine setting, 30 seconds unless changed. This is the only waiting period the engine invents | Spec choice (review gap) | 01 §6 |
+| D10 | Timeouts | The engine has a default `execution_timeout`: 10 minutes for a task call and 60 seconds for a workflow call. Both are engine settings, and a task or workflow may state its own. `schedule_timeout` stays off unless the task sets it | **Decided** that timeouts exist. The two values are the spec's recommendation | 01 §5 |
+| D11 | Worker reconnect grace period | 10 seconds, an engine setting. The worker reconnects with backoff inside that window, and work lost after it is retried under the task's own backoff | **Decided** (10 seconds plus backoff). The backoff schedule is a spec choice | 01 §6 |
 | D12 | Local step results in durable-enqueue mode | A workflow outcome that saves a local step result is flushed to disk before anything depends on it | Spec choice (review gap) | 05 §2 |
 | D13 | How workflow calls wait and retry | They wait for host capacity only, are sent ahead of task calls, and retry under the workflow's own `retries` options | Spec choice (review gap) | 01 §3, §5 |
 | D14 | A per-key limit used by a run with no key | The step fails with `key_required` without running | Spec choice (review gap) | 02 §3 |
 | D15 | Cancellation | Queued work is dropped at once. Running calls are told to stop, and their limit units return only when they end | Spec choice (review gap) | 01 §7 |
 | D16 | Attempts lost because the engine itself restarted | Recorded, retried, and not counted against `retries` | Spec choice | 01 §5 |
 | D17 | Schedule time zone | Cron expressions are read in UTC only | Spec choice | 01 §9 |
-| D18 | Licence | None chosen. The repository has no licence file until Matt picks one | Open (17.4) | |
+| D18 | Licence | MIT. See `LICENSE` | **Decided** | |
 
 Settled since the handoff: the name is **geartrain**, the repository is `mdrideout/geartrain`, and the default branch is `master`. **Decided.**
 
@@ -62,7 +62,7 @@ These come from the gaps found when the handoff was reviewed.
 
 | Handoff | This specification | Why |
 |---|---|---|
-| A default `execution_timeout` is implied (6.4, 6.6) | No default. A task without one is never timed out (D10) | Matt's rule against arbitrary timeouts |
+| A default `execution_timeout` is implied but has no value (6.4, 6.6) | The default is an engine setting with stated values (D10) | Matt confirmed timeouts are needed |
 | The probe recovers a stale worker by lease expiry (6.9, Appendix B) | There are no leases. An attempt ends by outcome, by its own timeout, or by its host being lost. A late outcome is refused by attempt token (01 §4) | The main design dropped leases |
 | "A lost step result only causes a repeat" (6.3) | True for task results under idempotent tasks. Not true for local `ctx.step` results, so those are flushed (D12) | A regenerated identifier would differ from the one a task already used |
 | Workflow calls "never wait in a queue" (6.5) | They wait for host capacity, oldest first, and hold no limits (D13) | The handoff did not say what happens when the host is full |

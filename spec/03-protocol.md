@@ -293,11 +293,11 @@ Sync is run as a deploy step. It wakes the service once. Until a service has bee
 
 ## 8. What every SDK provides
 
-**Default D4.** Python is built first, then TypeScript, then Rust.
+**Decided:** the Rust SDK is built first. Python and then TypeScript follow (D4).
 
 - A client to start, read and cancel runs.
 - Workflow replay: return saved results, raise `TaskFailed` for saved errors, execute local steps, stop at the first unresolved step, report what is wanted, detect a changed workflow.
-- A connected worker: register, open the stream, run calls up to capacity, post outcomes, reconnect, handle re-sent and cancelled calls.
+- A connected worker: register, open the stream, run calls up to capacity, post outcomes, reconnect with backoff ([01](01-semantics.md) §6), handle re-sent and cancelled calls.
 - An adapter for invoked services: one route in the language's usual web framework that verifies signatures, answers catalog requests and runs calls.
 - The catalog of hosted workflows and tasks with their options.
 

@@ -139,7 +139,7 @@ An attempt ends when the first of these happens:
 | Ending | Recorded outcome |
 |---|---|
 | The host reports an outcome that quotes the token | `ok`, `error`, `limited`, `suspended` or `continue_as_new` |
-| The attempt's `execution_timeout` passes, if it has one | `timeout` |
+| The attempt's execution timeout passes | `timeout` |
 | Its host is lost (section 6) | `lost` |
 | The engine restarted while the call was in flight to an invoked service | `engine_restart` |
 | The run was cancelled, and the call then ended in any of the ways above | The same outcome, with the attempt flagged as cancelled |
@@ -161,11 +161,22 @@ Options are stated on the task or workflow in code, because they describe that p
 | `retries` | Tasks, workflows | Failed attempts allowed after the first | 0 |
 | `backoff_factor` | Tasks, workflows | Base of the exponential backoff | Retry immediately |
 | `backoff_max_seconds` | Tasks, workflows | Cap on one backoff delay | No cap |
-| `execution_timeout` | Tasks, workflows | How long one attempt may take | **The attempt is never timed out** |
+| `execution_timeout` | Tasks, workflows | How long one attempt may take | The engine's default: 10 minutes for a task, 60 seconds for a workflow call |
 | `schedule_timeout` | Tasks | How long a task may wait for its first attempt to start | **The task waits indefinitely** |
 | `uses` | Tasks | Limit names and unit counts ([02](02-queues-and-limits.md) §3) | Uses nothing of its own |
 
-**Default D10.** The engine ships no default for either timeout. Matt's rule is that a limit is added only after a real, documented problem, and a timeout picked by the engine would be an arbitrary one. A value on a task is the author's statement about that code. The consequence must be documented in every SDK: a task without `execution_timeout` that hangs on a still-connected worker holds its limit units until that worker disconnects.
+**Decided:** every attempt has an execution timeout. Without one, a task that hangs on a still-connected worker would hold its limit units forever.
+
+**Default D10** covers the values. When a task or workflow states no `execution_timeout`, the engine applies its own default, read from two engine settings ([05](05-durability-and-recovery.md) §3):
+
+| Setting | Applies to | Value unless changed | Why this value |
+|---|---|---|---|
+| `default_task_execution_timeout` | Task calls | 10 minutes | The longest task timeout in the reference workload, and under the request cap of the common scale-to-zero platforms |
+| `default_workflow_execution_timeout` | Workflow calls | 60 seconds | A workflow call only replays saved results and runs small local steps |
+
+A value stated on the task or workflow always wins, and may be longer or shorter than the default. There is no way to switch the timeout off.
+
+`schedule_timeout` has no default. A task waiting in a queue holds nothing, and a default would fail work that is only waiting for a paused queue or a deploy.
 
 The backoff delay before retry number `n` (the first retry is 1) is `backoff_factor ^ n` seconds, capped at `backoff_max_seconds`. With factor 2.0 and cap 10 this gives 2 s, 4 s, 8 s, 10 s, 10 s.
 
@@ -199,13 +210,15 @@ Every step has its own count of failed attempts.
 
 **Connected workers.** The engine learns a worker is gone when its stream closes.
 
-- **Default D11.** The engine then waits for the worker to reconnect, for the engine setting `worker_reconnect_grace` (30 seconds unless changed). Without a wait, every network blip would re-run work that is still running. This is a deadline for one specific known thing and is the only waiting period the engine invents.
+- **Decided.** The engine then waits 10 seconds for the worker to reconnect. The value is the engine setting `worker_reconnect_grace`. Without a wait, every network blip would re-run work that is still running.
+- **Default D11** covers the backoff. A worker whose stream closes reconnects at once. If that fails it waits 250 ms and doubles the wait after each failure, up to 5 seconds, with random jitter so that many workers do not reconnect in step after an engine restart. It keeps trying for as long as the process lives. Several tries fit inside the grace period.
+- Work lost after the grace period is not retried at once either: each lost attempt is retried under its task's own `backoff_factor` (section 5.1).
 - If the worker reconnects in time with the same worker id, its attempts carry on. The engine re-sends every call still open for that worker, because a call written to a dying connection may never have arrived. The SDK must ignore a call id it is already running, and must re-post the outcome for one it has finished.
-- If the grace period passes, every open attempt on that worker ends as `lost`, and the worker's record is removed. A late reconnect is refused and the worker must register again.
+- If the grace period passes, every open attempt on that worker ends as `lost`, and the worker's record is removed. A later reconnect is refused with `worker_gone`, and the worker registers again and gets a new worker id.
 - A worker process that restarts registers again and gets a new worker id. Its old id runs out its grace period.
-- A worker that is connected but hung is caught only by the task's `execution_timeout`.
+- A worker that is connected but hung is caught by the attempt's execution timeout.
 
-**Invoked services.** The HTTP request is the attempt. If the connection fails, closes without a response, or the response is unusable, the attempt ends at once. There is no grace period. The engine's request waits as long as the attempt's `execution_timeout`, or indefinitely if there is none; the platform's own request cap ends the request in practice.
+**Invoked services.** The HTTP request is the attempt. If the connection fails, closes without a response, or the response is unusable, the attempt ends at once. There is no grace period. The engine's request waits as long as the attempt's execution timeout.
 
 ## 7. Cancellation
 
